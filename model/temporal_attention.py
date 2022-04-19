@@ -66,7 +66,7 @@ class TemporalAttentionLayer(torch.nn.Module):
     neighbors_padding_mask[invalid_neighborhood_mask.squeeze(), 0] = False
 
     # print(query.shape, key.shape)
-
+    print(query.shape, key.shape, key.shape)
     attn_output, attn_output_weights = self.multi_head_target(query=query, key=key, value=key,
                                                               key_padding_mask=neighbors_padding_mask)
 

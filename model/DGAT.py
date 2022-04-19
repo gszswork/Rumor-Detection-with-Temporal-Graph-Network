@@ -4,13 +4,13 @@ import numpy as np
 import torch
 from collections import defaultdict
 
-from utils.utils import MergeLayer
+from utils.utils import MergeLayer, get_neighbor_finder
+from utils.data_processing import Data
 from modules.memory import Memory
 from modules.message_aggregator import get_message_aggregator
 from modules.message_function import get_message_function
 from modules.memory_updater import get_memory_updater
-#from modules.embedding_module import get_embedding_module
-from model.my_embedding_module import get_embedding_module
+from modules.embedding_module import get_embedding_module
 from model.time_encoding import TimeEncode
 # Temporal Attention Module can be used for the Temporal Attention Mechanism but without Memory.
 
@@ -45,7 +45,7 @@ class TGAT(torch.nn.Module):
 
 
         self.n_node_features = node_feat_dim
-        # self.n_nodes = self.node_raw_features.shape[0]
+        self.n_nodes = None
         self.n_edge_features = edge_feat_dim # No edge feature needed.
         self.embedding_dimension = self.n_node_features
         self.n_neighbors = n_neighbors
@@ -117,10 +117,10 @@ class TGAT(torch.nn.Module):
         # To create a new memory, we need to know the max-num of nodes in current temporal graph.
 
         # Get the dimension of memory as n_nodes
-        n_nodes = len(node_features)
+        self.n_nodes = len(node_features)
         self.node_raw_features = torch.from_numpy(node_features.astype(np.float32)).to(device)
         self.edge_raw_features = torch.from_numpy(edge_features.astype(np.float32)).to(device) # astype?
-        self.memory = Memory(n_nodes=n_nodes,
+        self.memory = Memory(n_nodes=self.n_nodes,
                              memory_dimension=self.memory_dimension,
                              input_dimension=self.message_dimension,
                              message_dimension=self.message_dimension,
@@ -129,7 +129,7 @@ class TGAT(torch.nn.Module):
         neighbor_finder = None
         return neighbor_finder
 
-    def forward(self, memory, neighbor_finder, source_nodes, destination_nodes,
+    def forward(self, memory, raw_node_features, raw_edge_features, neighbor_finder, source_nodes, destination_nodes,
                 edge_times, edge_idxs, n_neighbors=20):
 
         self.memory = memory
@@ -168,6 +168,8 @@ class TGAT(torch.nn.Module):
         # Here whe computing the node_embedding, we take all nodes including source, destination and negative into
         #   consideration. In fake news detection we can only take sources and destinations.
         node_embedding = self.embedding_module.compute_embedding(memory=memory,
+                                                                 node_features=raw_node_features,
+                                                                 edge_features=raw_edge_features,
                                                                  neighbor_finder=neighbor_finder,
                                                                  source_nodes=nodes,
                                                                  timestamps=timestamps,
@@ -225,7 +227,7 @@ class TGAT(torch.nn.Module):
             unique_messages = self.message_function.compute_message(unique_messages)
 
         # Update the memory with the aggregated messages
-        self.memory_updater.update_memory(unique_nodes, unique_messages,
+        self.memory_updater.update_memory(self.memory, unique_nodes, unique_messages,
                                           timestamps=unique_timestamps)
 
     def get_updated_memory(self, nodes, messages):
@@ -238,7 +240,8 @@ class TGAT(torch.nn.Module):
         if len(unique_nodes) > 0:
             unique_messages = self.message_function.compute_message(unique_messages)
 
-        updated_memory, updated_last_update = self.memory_updater.get_updated_memory(unique_nodes,
+        updated_memory, updated_last_update = self.memory_updater.get_updated_memory(self.memory,
+                                                                                     unique_nodes,
                                                                                      unique_messages,
                                                                                      timestamps=unique_timestamps)
         return updated_memory, updated_last_update
@@ -274,7 +277,7 @@ class TGAT(torch.nn.Module):
 
 
 if __name__ == '__main__':
-    model_tgat = TGAT(node_feat_dim=5000, edge_feat_dim=1, #node_features, edge_features,
+    model_tgat = TGAT(node_feat_dim=500, edge_feat_dim=500, #node_features, edge_features,
                  device='cpu',
                  n_layers=2,  # node_features and edge features need to be input
                  n_heads=2, dropout=0.1, use_memory=True,
@@ -289,16 +292,22 @@ if __name__ == '__main__':
                  dyrep=False)
     print("model_tgat created. ")
 
-    raw_node_features = np.random.rand(6,2)
-    raw_edge_features = np.random.rand(3,2)
+    raw_node_features = np.random.rand(6,500)
+
+    raw_edge_features = np.random.rand(3,500)
     model_tgat.init_event(raw_node_features, raw_edge_features)
 
+    full_data = Data([1, 1, 1], [2, 3, 4], np.random.rand(3), [0, 1, 2], [0, 0, 0])
+    # We need full_data to init neighbor_finder
+    neighbor_finder = get_neighbor_finder(data=full_data, uniform=False, max_node_idx=4)
     result = model_tgat(memory=model_tgat.memory,
-                        neighbor_finder=None,
-                        source_nodes=None,
-                        destination_nodes=None,
-                        edge_times=None,
-                        edge_idxs=None,
+                        raw_node_features=torch.from_numpy(raw_node_features).float(),
+                        raw_edge_features=torch.from_numpy(raw_edge_features).float(),
+                        neighbor_finder=neighbor_finder,
+                        source_nodes=full_data.sources,
+                        destination_nodes=full_data.destinations,
+                        edge_times=full_data.timestamps,
+                        edge_idxs=full_data.edge_idxs,
                         n_neighbors=20)
     print("model_tgat memory reset. ")
     '''

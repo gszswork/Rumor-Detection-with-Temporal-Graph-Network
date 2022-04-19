@@ -115,6 +115,9 @@ class GraphEmbedding(EmbeddingModule):
 
       neighbors = neighbors.flatten()
       neighbor_embeddings = self.compute_embedding(memory,
+                                                   node_features,
+                                                   edge_features,
+                                                   neighbor_finder,
                                                    neighbors,
                                                    np.repeat(timestamps, n_neighbors),
                                                    n_layers=n_layers - 1,
