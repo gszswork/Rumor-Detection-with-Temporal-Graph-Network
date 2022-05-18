@@ -6,7 +6,7 @@ from copy import deepcopy
 
 
 class Memory(nn.Module):
-  # Memory 本质在network中是作为张量存在，但是是以Parameter的形式。
+
   def __init__(self, n_nodes, memory_dimension, input_dimension, message_dimension=None,
                device="cpu", combination_method='sum'):
     super(Memory, self).__init__()
@@ -15,8 +15,8 @@ class Memory(nn.Module):
     self.input_dimension = input_dimension
     self.message_dimension = message_dimension
     self.device = device
-
     self.combination_method = combination_method
+
 
     self.__init_memory__()
 
@@ -27,10 +27,11 @@ class Memory(nn.Module):
     # Treat memory as parameter so that it is saved and loaded together with the model
     self.memory = nn.Parameter(torch.zeros((self.n_nodes, self.memory_dimension)).to(self.device),
                                requires_grad=False)
+    
     self.last_update = nn.Parameter(torch.zeros(self.n_nodes).to(self.device),
-                                    requires_grad=False)
+                                    requires_grad=False).double()
 
-    self.messages = defaultdict(list)
+    self.messages = defaultdict(list)#<class 'collections.defaultdict'>
 
   def store_raw_messages(self, nodes, node_id_to_messages):
     for node in nodes:

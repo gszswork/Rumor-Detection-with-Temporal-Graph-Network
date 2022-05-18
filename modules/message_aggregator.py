@@ -51,7 +51,6 @@ class LastMessageAggregator(MessageAggregator):
     
     unique_messages = torch.stack(unique_messages) if len(to_update_node_ids) > 0 else []
     unique_timestamps = torch.stack(unique_timestamps) if len(to_update_node_ids) > 0 else []
-
     return to_update_node_ids, unique_messages, unique_timestamps
 
 
